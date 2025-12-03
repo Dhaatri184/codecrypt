@@ -1,0 +1,168 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  lint-and-type-check:
+    name: Lint and Type Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        run: npm run lint --if-present
+
+      - name: Type check
+        run: npm run type-check --if-present
+
+  test-backend:
+    name: Test Backend
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: codecrypt_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run database migrations
+        working-directory: ./backend
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/codecrypt_test
+        run: |
+          npm run migrate
+
+      - name: Run backend tests
+        working-directory: ./backend
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/codecrypt_test
+          REDIS_URL: redis://localhost:6379
+          NODE_ENV: test
+        run: npm test
+
+  test-scanner:
+    name: Test Scanner
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run scanner tests
+        working-directory: ./scanner
+        run: npm test
+
+  test-frontend:
+    name: Test Frontend
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: ./frontend
+        run: npm run build
+
+      - name: Run frontend tests
+        working-directory: ./frontend
+        run: npm test --if-present
+
+  build-docker-images:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    needs: [lint-and-type-check, test-backend, test-scanner, test-frontend]
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Build backend image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./backend
+          push: false
+          tags: codecrypt/backend:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build frontend image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./frontend
+          push: false
+          tags: codecrypt/frontend:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build scanner image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./scanner
+          push: false
+          tags: codecrypt/scanner:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

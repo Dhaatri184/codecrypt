@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dashboard Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #fff;
+        }
+        .section {
+            background: #2a2a2a;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+        }
+        button {
+            background: #7c3aed;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #6d28d9;
+        }
+        pre {
+            background: #1a1a1a;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+        .error { color: #ef4444; }
+        .success { color: #10b981; }
+        .warning { color: #f59e0b; }
+    </style>
+</head>
+<body>
+    <h1>🧪 CodeCrypt Dashboard Test</h1>
+    
+    <div class="section">
+        <h2>Step 1: Get Your Token</h2>
+        <p>Open http://localhost:3000, press F12, go to Application → Local Storage → http://localhost:3000</p>
+        <input type="text" id="token" placeholder="Paste your token here" style="width: 100%; padding: 10px; background: #1a1a1a; color: #fff; border: 1px solid #444;">
+    </div>
+
+    <div class="section">
+        <h2>Step 2: Test API</h2>
+        <button onclick="testRepositories()">1. Get Repositories</button>
+        <button onclick="testScans()">2. Get Scans</button>
+        <button onclick="testResults()">3. Get Results</button>
+        <div id="output"></div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:4000/api';
+        let selectedRepoId = null;
+        let selectedScanId = null;
+
+        function getToken() {
+            const token = document.getElementById('token').value;
+            if (!token) {
+                alert('Please enter your token first!');
+                return null;
+            }
+            return token;
+        }
+
+        function log(message, type = 'info') {
+            const output = document.getElementById('output');
+            const color = type === 'error' ? 'error' : type === 'success' ? 'success' : type === 'warning' ? 'warning' : '';
+            output.innerHTML += `<div class="${color}">${message}</div>`;
+        }
+
+        function logJson(data) {
+            const output = document.getElementById('output');
+            output.innerHTML += `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+        }
+
+        async function testRepositories() {
+            const token = getToken();
+            if (!token) return;
+
+            document.getElementById('output').innerHTML = '<h3>Testing Repositories API...</h3>';
+            
+            try {
+                const response = await fetch(`${API_URL}/repositories`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    log(`✅ Found ${data.data.length} repositories`, 'success');
+                    logJson(data.data);
+                    
+                    if (data.data.length > 0) {
+                        selectedRepoId = data.data[0].id;
+                        log(`📌 Selected repository: ${data.data[0].fullName}`, 'success');
+                    }
+                } else {
+                    log(`❌ Error: ${data.error.message}`, 'error');
+                }
+            } catch (error) {
+                log(`❌ Request failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function testScans() {
+            const token = getToken();
+            if (!token) return;
+
+            if (!selectedRepoId) {
+                log('⚠️ Please run "Get Repositories" first', 'warning');
+                return;
+            }
+
+            document.getElementById('output').innerHTML = '<h3>Testing Scans API...</h3>';
+            
+            try {
+                const response = await fetch(`${API_URL}/scans/repository/${selectedRepoId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    log(`✅ Found ${data.data.length} scans`, 'success');
+                    logJson(data.data);
+                    
+                    const completedScans = data.data.filter(s => s.status === 'completed');
+                    if (completedScans.length > 0) {
+                        selectedScanId = completedScans[0].id;
+                        log(`📌 Selected scan: ${selectedScanId}`, 'success');
+                        log(`   Status: ${completedScans[0].status}`, 'success');
+                        log(`   Files: ${completedScans[0].totalFiles}`, 'success');
+                        log(`   Issues: ${completedScans[0].totalIssues}`, 'success');
+                    } else {
+                        log('⚠️ No completed scans found', 'warning');
+                    }
+                } else {
+                    log(`❌ Error: ${data.error.message}`, 'error');
+                }
+            } catch (error) {
+                log(`❌ Request failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function testResults() {
+            const token = getToken();
+            if (!token) return;
+
+            if (!selectedScanId) {
+                log('⚠️ Please run "Get Scans" first', 'warning');
+                return;
+            }
+
+            document.getElementById('output').innerHTML = '<h3>Testing Results API...</h3>';
+            log(`Fetching results for scan: ${selectedScanId}`);
+            
+            try {
+                const response = await fetch(`${API_URL}/scans/${selectedScanId}/results`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    log(`✅ Results loaded successfully!`, 'success');
+                    log(`   Scan ID: ${data.data.scan.id}`, 'success');
+                    log(`   Status: ${data.data.scan.status}`, 'success');
+                    log(`   Issues: ${data.data.issues.length}`, 'success');
+                    log(`   Issues is array: ${Array.isArray(data.data.issues)}`, 'success');
+                    
+                    if (data.data.issues.length > 0) {
+                        log(`\n📊 Sample Issue:`, 'success');
+                        logJson(data.data.issues[0]);
+                    }
+                    
+                    log(`\n✅ API IS WORKING CORRECTLY!`, 'success');
+                    log(`\nIf dashboard is not showing results, the issue is in the React frontend.`, 'warning');
+                    log(`Check browser console (F12) on http://localhost:3000 for errors.`, 'warning');
+                } else {
+                    log(`❌ Error: ${data.error.message}`, 'error');
+                }
+            } catch (error) {
+                log(`❌ Request failed: ${error.message}`, 'error');
+                console.error(error);
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+{
+  "name": "codecrypt-demo",
+  "version": "1.0.0",
+  "description": "Demo repository with intentional code issues for CodeCrypt",
+  "main": "src/index.js",
+  "scripts": {
+    "test": "echo \"No tests yet\" && exit 0"
+  },
+  "keywords": ["demo", "code-quality"],
+  "author": "CodeCrypt Team",
+  "license": "MIT"
+}

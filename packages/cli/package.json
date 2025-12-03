@@ -1,0 +1,28 @@
+{
+  "name": "@codecrypt/cli",
+  "version": "1.0.0",
+  "description": "CodeCrypt CLI for local repository scanning",
+  "main": "dist/index.js",
+  "bin": {
+    "codecrypt": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "ts-node src/index.ts"
+  },
+  "keywords": ["codecrypt", "code-quality", "cli"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "commander": "^11.0.0",
+    "chalk": "^4.1.2",
+    "cli-table3": "^0.6.3",
+    "axios": "^1.6.0",
+    "ora": "^5.4.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0",
+    "ts-node": "^10.9.0"
+  }
+}

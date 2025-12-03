@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Direct Scan Test</title>
+    <style>
+        body {
+            font-family: monospace;
+            background: #1a1a1a;
+            color: #fff;
+            padding: 20px;
+        }
+        .scan {
+            background: #2a2a2a;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border-left: 4px solid #8b5cf6;
+        }
+        .completed { border-left-color: #10b981; }
+        .pending { border-left-color: #f59e0b; }
+        .failed { border-left-color: #ef4444; }
+        button {
+            background: #8b5cf6;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+        }
+        button:hover { background: #7c3aed; }
+        #status { margin: 20px 0; padding: 10px; background: #2a2a2a; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Direct Scan Test (No Cache)</h1>
+    <p>This page directly queries the backend API - no React, no cache</p>
+    
+    <div>
+        <button onclick="checkScans()">🔄 Refresh Scans</button>
+        <button onclick="location.reload(true)">🗑️ Hard Reload Page</button>
+    </div>
+    
+    <div id="status">Click "Refresh Scans" to load data...</div>
+    <div id="scans"></div>
+
+    <script>
+        const API_URL = 'http://localhost:4000';
+        
+        async function checkScans() {
+            const status = document.getElementById('status');
+            const scansDiv = document.getElementById('scans');
+            
+            status.innerHTML = '⏳ Loading...';
+            scansDiv.innerHTML = '';
+            
+            try {
+                // Get repositories
+                const reposRes = await fetch(`${API_URL}/api/repositories`, {
+                    credentials: 'include'
+                });
+                
+                if (!reposRes.ok) {
+                    status.innerHTML = '❌ Error: Not authenticated. Please log in to the main app first.';
+                    return;
+                }
+                
+                const reposData = await reposRes.json();
+                const repos = reposData.data;
+                
+                if (!repos || repos.length === 0) {
+                    status.innerHTML = '⚠️ No repositories found';
+                    return;
+                }
+                
+                status.innerHTML = `✅ Found ${repos.length} repository(ies)`;
+                
+                // Get scans for each repo
+                for (const repo of repos) {
+                    const scansRes = await fetch(`${API_URL}/api/scans/repository/${repo.id}`, {
+                        credentials: 'include'
+                    });
+                    const scansData = await scansRes.json();
+                    const scans = scansData.data;
+                    
+                    const repoDiv = document.createElement('div');
+                    repoDiv.innerHTML = `<h2>📦 ${repo.fullName || repo.name}</h2>`;
+                    scansDiv.appendChild(repoDiv);
+                    
+                    if (!scans || scans.length === 0) {
+                        repoDiv.innerHTML += '<p>No scans found</p>';
+                        continue;
+                    }
+                    
+                    scans.slice(0, 5).forEach(scan => {
+                        const scanDiv = document.createElement('div');
+                        scanDiv.className = `scan ${scan.status}`;
+                        
+                        const startTime = new Date(scan.startedAt);
+                        const endTime = scan.completedAt ? new Date(scan.completedAt) : null;
+                        const duration = endTime ? ((endTime - startTime) / 1000).toFixed(1) : 'N/A';
+                        
+                        scanDiv.innerHTML = `
+                            <div><strong>Scan ID:</strong> ${scan.id}</div>
+                            <div><strong>Status:</strong> ${scan.status.toUpperCase()}</div>
+                            <div><strong>Progress:</strong> ${scan.progressPercentage || 0}%</div>
+                            <div><strong>Files:</strong> ${scan.filesProcessed || 0}/${scan.totalFilesDiscovered || 0}</div>
+                            <div><strong>Issues Found:</strong> ${scan.totalIssues || 0}</div>
+                            <div><strong>Started:</strong> ${startTime.toLocaleString()}</div>
+                            <div><strong>Duration:</strong> ${duration}s</div>
+                            <div><strong>Timestamp:</strong> ${Date.now()}</div>
+                        `;
+                        scansDiv.appendChild(scanDiv);
+                    });
+                }
+                
+            } catch (error) {
+                status.innerHTML = `❌ Error: ${error.message}`;
+                console.error(error);
+            }
+        }
+        
+        // Auto-load on page load
+        window.onload = checkScans;
+    </script>
+</body>
+</html>

@@ -1,0 +1,129 @@
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    container_name: codecrypt-db
+    environment:
+      POSTGRES_DB: codecrypt
+      POSTGRES_USER: codecrypt
+      POSTGRES_PASSWORD: codecrypt_dev_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U codecrypt"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for job queues and caching
+  redis:
+    image: redis:7-alpine
+    container_name: codecrypt-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend API
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: codecrypt-backend
+    ports:
+      - "4000:4000"
+    environment:
+      NODE_ENV: development
+      PORT: 4000
+      DATABASE_URL: postgresql://codecrypt:codecrypt_dev_password@db:5432/codecrypt
+      REDIS_URL: redis://redis:6379
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET}
+      GITHUB_CALLBACK_URL: http://localhost:4000/api/auth/github/callback
+      JWT_SECRET: ${JWT_SECRET:-dev_jwt_secret_change_in_production}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      FRONTEND_URL: http://localhost:3000
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+      - repo_cache:/tmp/repos
+    command: npm run dev
+
+  # Scanner Worker
+  scanner:
+    build:
+      context: .
+      dockerfile: scanner/Dockerfile
+    container_name: codecrypt-scanner
+    environment:
+      NODE_ENV: development
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql://codecrypt:codecrypt_dev_password@db:5432/codecrypt
+    depends_on:
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    volumes:
+      - ./scanner:/app
+      - /app/node_modules
+      - repo_cache:/tmp/repos
+    command: npm run dev
+
+  # AI Explanation Worker
+  ai-worker:
+    build:
+      context: .
+      dockerfile: workers/ai/Dockerfile
+    container_name: codecrypt-ai-worker
+    environment:
+      NODE_ENV: development
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql://codecrypt:codecrypt_dev_password@db:5432/codecrypt
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+    depends_on:
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    volumes:
+      - ./workers/ai:/app
+      - /app/node_modules
+    command: npm run dev
+
+  # Frontend
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: codecrypt-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      VITE_API_URL: http://localhost:4000
+      VITE_WS_URL: ws://localhost:4000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    command: npm run dev
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+  redis_data:
+  repo_cache:
