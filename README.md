@@ -40,7 +40,7 @@ CodeCrypt is a code quality analysis tool that gamifies technical debt by visual
 
 1. **Clone the repository**
 ```bash
-git clone https://github.com/yourusername/codecrypt.git
+git clone https://github.com/Dhaatri184/codecrypt.git
 cd codecrypt
 ```
 
